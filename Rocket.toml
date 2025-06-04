@@ -1,0 +1,6 @@
+[default]
+address = "0.0.0.0"
+port = 8000
+
+[default.databases.blog_db]
+url = "postgres://postgres:postgres@localhost/blog_api"
