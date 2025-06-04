@@ -1,10 +1,16 @@
 use diesel::prelude::*;
 use crate::schema::posts;
-use crate::models::{Post,PostWithTags,PostTag, NewPost, PaginatedPosts, PaginationMeta};
+use crate::models::{Post,PostWithTags,PostTag, NewPost, PaginatedPosts, PaginationMeta,PostWithUserAndTags};
 use diesel::dsl::sql;
 use diesel::pg::sql_types::Array;
 use diesel::sql_types::Text;
 use crate::schema::posts_tags;
+use crate::schema::users;
+use crate::models::UserInfo;
+
+
+
+
 pub fn create_post_with_tags(
     conn: &mut PgConnection,
     new_post: NewPost,
@@ -56,15 +62,15 @@ pub fn list_posts(
     let page = page.unwrap_or(1);
     let per_page = per_page.unwrap_or(10);
     let offset = (page - 1) * per_page;
-
-let mut count_query = posts::table.into_boxed();
-let  records_query = posts::table.into_boxed();
+    let mut count_query = posts::table.left_join(users::table).into_boxed();
+let mut records_query = posts::table.left_join(users::table).into_boxed();
 
 
     if let Some(search) = search {
         count_query = count_query.filter(
             posts::title.ilike(format!("%{}%", search))
                 .or(posts::body.ilike(format!("%{}%", search)))
+                .or(users::username.ilike(format!("%{}%", search)))
         );
     }
 
@@ -76,18 +82,38 @@ let  records_query = posts::table.into_boxed();
     let from = offset + 1;
     let to = std::cmp::min(offset + per_page, total_docs);
 
-    // Main query with array aggregation for tags
+    // Main query with joins and aggregations
     let records = records_query
         .order(posts::id.desc())
         .limit(per_page)
         .offset(offset)
         .select((
             posts::all_columns,
+            // User info as nullable
+            users::id.nullable(),
+            users::username.nullable(),
+            users::first_name.nullable(),
+            users::last_name.nullable(),
+            // Tags array
             sql::<Array<Text>>("ARRAY(SELECT tag FROM posts_tags WHERE post_id = posts.id)")
         ))
-        .load::<(Post, Vec<String>)>(conn)?
+        .load::<(Post, Option<i32>, Option<String>, Option<String>, Option<String>, Vec<String>)>(conn)?
         .into_iter()
-        .map(|(post, tags)| PostWithTags { post, tags })
+        .map(|(post, user_id, username, first_name, last_name, tags)| {
+            PostWithUserAndTags {
+                post,
+                created_by: match user_id {
+                    Some(id) => Some(UserInfo {
+                        user_id: id,
+                        username: username.unwrap(),
+                        first_name: first_name.unwrap(),
+                        last_name,
+                    }),
+                    None => None,
+                },
+                tags,
+            }
+        })
         .collect();
 
     Ok(PaginatedPosts {
