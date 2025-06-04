@@ -2,10 +2,11 @@ use rocket::{get, post, routes};
 use rocket::serde::json::Json;
 use rocket::response::status::Created;
 use rocket::http::Status;
-
+use rocket::serde::Deserialize;
 use crate::DbConn;
-use crate::models::{User, NewUser, Post, NewPost, PaginatedPosts};
+use crate::models::{User, NewUser, NewPost, PaginatedPosts};
 use crate::repositories::{user_repository, post_repository};
+use crate::models::PostWithTags;
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
@@ -27,17 +28,29 @@ async fn create_user(
     }).await
 }
 
+#[derive(Deserialize, Clone)]
+pub struct NewPostWithTags {
+    #[serde(flatten)]
+    pub post: NewPost,
+    pub tags: Vec<String>,
+}
+
 #[post("/posts", data = "<new_post>")]
 async fn create_post(
     conn: DbConn,
-    new_post: Json<NewPost>,
-) -> Result<Created<Json<Post>>, Status> {
-    conn.run(|c| {
-        post_repository::create_post(c, new_post.into_inner())
+    new_post: Json<NewPostWithTags>,
+) -> Result<Created<Json<PostWithTags>>, Status> {
+    conn.run(move |c| {
+        post_repository::create_post_with_tags(
+             c,
+             new_post.post.clone(),
+            new_post.tags.clone(),
+        )
             .map(|p| Created::new("/posts").body(Json(p)))
             .map_err(|_| Status::InternalServerError)
     }).await
 }
+
 
 #[get("/posts?<page>&<per_page>&<search>")]
 async fn list_posts(

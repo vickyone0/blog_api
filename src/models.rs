@@ -1,6 +1,11 @@
 use serde::{Serialize, Deserialize};
 use diesel::{Queryable, Insertable};
 use crate::schema::{users, posts};
+use diesel::sql_types::Array;
+use diesel::sql_types::Text;
+use diesel::dsl::sql;
+
+use crate::schema::posts_tags;
 
 #[derive(Queryable, Serialize, Deserialize)]
 pub struct User {
@@ -26,7 +31,7 @@ pub struct Post {
     pub body: String,
 }
 
-#[derive(Insertable, Serialize, Deserialize)]
+#[derive(Insertable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = posts)]
 pub struct NewPost {
     pub created_by: i32,
@@ -36,7 +41,7 @@ pub struct NewPost {
 
 #[derive(Serialize)]
 pub struct PaginatedPosts {
-    pub records: Vec<Post>,
+    pub records: Vec<PostWithTags>,
     pub meta: PaginationMeta,
 }
 
@@ -48,4 +53,19 @@ pub struct PaginationMeta {
     pub to: i64,
     pub total_pages: i64,
     pub total_docs: i64,
+}
+
+
+#[derive(Queryable, Serialize, Deserialize)]
+pub struct PostWithTags {
+    #[serde(flatten)]
+    pub post: Post,
+    pub tags: Vec<String>,
+}
+
+#[derive(Insertable, Serialize, Deserialize)]
+#[diesel(table_name = posts_tags)]
+pub struct PostTag {
+    pub post_id: i32,
+    pub tag: String,
 }

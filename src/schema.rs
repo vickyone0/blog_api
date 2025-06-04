@@ -11,6 +11,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    posts_tags (post_id, tag) {
+        post_id -> Int4,
+        #[max_length = 255]
+        tag -> Varchar,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Int4,
         #[max_length = 255]
@@ -23,8 +31,11 @@ diesel::table! {
 }
 
 diesel::joinable!(posts -> users (created_by));
+diesel::joinable!(posts_tags -> posts (post_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     posts,
+    posts_tags,
     users,
 );
+
